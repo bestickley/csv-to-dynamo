@@ -1,0 +1,54 @@
+service: csv-to-dynamo
+frameworkVersion: "=1.70.0"
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: dev
+  region: us-east-1
+  environment:
+    DYNAMODB_TABLE: ${self:custom.csvToDynamo.tableName}
+    REGION: ${self:provider.region}
+  iamRoleStatements:
+    - Effect: Allow
+      Action: 
+        - dynamodb:Scan
+        - dynamodb:BatchWriteItem
+        - s3:GetObject
+      Resource:
+        - arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${self:custom.csvToDynamo.tableName}
+        - arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${self:custom.csvToDynamo.tableName}/index/pk
+        - arn:aws:s3:::${self:custom.csvToDynamo.bucketName}/*
+plugins:
+  - serverless-pseudo-parameters
+  - file-to-s3-plugin
+  - invoke-lambda-plugin
+custom:
+  csvToDynamo:
+    filePath: ./data/housing_in_london_yearly_variables.csv
+    bucketName: csv-${self:provider.stage}
+    tableName: csv-${self:provider.stage}
+functions:
+  s3ToDynamo:
+    handler: src/functions/s3ToDynamo.upload
+    events:
+      - http:
+          method: put
+          cors: true
+          path: put
+resources:
+  Resources:
+    DynamoTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.csvToDynamo.tableName}
+        AttributeDefinitions: 
+          - AttributeName: pk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+    Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.csvToDynamo.bucketName}
