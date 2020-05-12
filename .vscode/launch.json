@@ -11,7 +11,17 @@
       "skipFiles": [
         "<node_internals>/**"
       ],
-      "program": "${workspaceFolder}\\index.js"
+      "program": "C:\\Users\\583327\\AppData\\Roaming\\npm\\node_modules\\serverless\\bin\\serverless",
+      "args": [
+        "invoke",
+        "local",
+        "-f",
+        "s3ToDynamo",
+        "-p",
+        "src/tests/inputData.json",
+        "-e",
+        "DYNAMODB_TABLE=csv-dev"
+      ]
     }
   ]
 }
