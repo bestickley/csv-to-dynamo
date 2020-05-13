@@ -4,7 +4,7 @@ const parse = require("csv-parse");
 const AWS = require("aws-sdk");
 const uuid = require("uuid");
 
-module.exports.upload = async event => {
+module.exports.handler = async event => {
   const { Bucket, Key } = JSON.parse(event.body);
 
   /* Get CSV Object from S3 */

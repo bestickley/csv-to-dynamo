@@ -1,5 +1,5 @@
 service: csv-to-dynamo
-frameworkVersion: "=1.70.0"
+frameworkVersion: "1.70.1"
 provider:
   name: aws
   runtime: nodejs12.x
@@ -20,7 +20,7 @@ custom:
     tableName: csv-${self:provider.stage}
 functions:
   s3ToDynamo:
-    handler: src/functions/s3ToDynamo.upload
+    handler: src/functions/s3ToDynamo.handler
     events:
       - http:
           method: put
