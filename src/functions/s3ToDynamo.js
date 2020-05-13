@@ -5,11 +5,10 @@ const AWS = require("aws-sdk");
 const uuid = require("uuid");
 
 module.exports.handler = async event => {
-  const { Bucket, Key } = JSON.parse(event.body);
 
   /* Get CSV Object from S3 */
   const s3 = new AWS.S3({ region: process.env.REGION });
-  const getS3ObjectPromise = s3.getObject({ Bucket, Key }).promise();
+  const getS3ObjectPromise = s3.getObject({ Bucket: process.env.BUCKET, Key: process.env.BUCKET_KEY }).promise();
 
   /* Query All Items in Table and Batch Delete Old CSV */
   const batchDeletePromises = []
@@ -110,8 +109,28 @@ module.exports.handler = async event => {
     }
   }
 
-  return {
-    statusCode: 201,
-    body: JSON.stringify({ message: 'CSV from S3 successfully written to DynamoDB' }),
-  };
+  try {
+    if (event.request.intent.name === "ParseCSVIntent") {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          "version": "1.0",
+          "response": {
+            "outputSpeech": {
+              "type": "SSML",
+              "ssml": "<speak>Your CSV is being parsed!</speak>"
+            },
+            "type": "_DEFAULT_RESPONSE"
+          },
+          "sessionAttributes": {},
+          "userAgent": "ask-node/2.7.0 Node/v10.20.0"
+        })
+      };
+    }
+  } catch {
+    return {
+      statusCode: 201,
+      body: JSON.stringify({ message: 'CSV from S3 successfully written to DynamoDB' }),
+    };
+  }
 };

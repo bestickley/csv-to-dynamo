@@ -8,6 +8,8 @@ provider:
   environment:
     DYNAMODB_TABLE: ${self:custom.csvToDynamo.tableName}
     REGION: ${self:provider.region}
+    BUCKET: ${self:custom.csvToDynamo.bucketName}
+    BUCKET_KEY: ${self:custom.csvToDynamo.bucketKeyName}
 plugins:
   - serverless-pseudo-parameters
   - serverless-iam-roles-per-function
@@ -17,6 +19,7 @@ custom:
   csvToDynamo:
     filePath: ./data/housing_in_london_yearly_variables.csv
     bucketName: csv-${self:provider.stage}
+    bucketKeyName: csv-${self:provider.stage}
     tableName: csv-${self:provider.stage}
 functions:
   s3ToDynamo:

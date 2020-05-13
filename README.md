@@ -15,6 +15,11 @@ Notes:
 - "file-to-s3-plugin" uploads the CSV at the file path specified in the `custom.csvToDynamo.filePath` within serverless.yaml
 - "invoke-lambda-plugin" invokes the lambda by getting the "ServiceEnpoint" from the cloud formation stacks output and then the lambda function extracts the data from S3 and inserts the data into DynamoDB
 
+## Alexa Invocation Instructions
+1. Create a developer account on developer.amazon.com/alexa
+1. Create a custom skill
+1. Go to the Test tab and say or type: "launch ben's lambda and parse my csv to dynamodb"
+
 ## Debug Instructions
 1. Update .vscode/launch.json `program` property with serverless program
 1. Update src/tests/event.json with data to be passed to lambda function

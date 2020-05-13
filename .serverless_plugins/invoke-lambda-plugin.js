@@ -31,11 +31,7 @@ class InvokeLambda {
         serviceEndpoint + "/put",
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            Bucket: this.serverless.service.custom.csvToDynamo.bucketName,
-            Key: basename(this.serverless.service.custom.csvToDynamo.filePath)
-          })
+          headers: { "Content-Type": "application/json" }
         }
       );
       if (!res.ok) {

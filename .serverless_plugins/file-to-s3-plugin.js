@@ -1,6 +1,5 @@
 const AWS = require("aws-sdk");
 const fsp = require("fs").promises;
-const basename = require("path").basename
 
 class FileToS3Plugin {
   constructor(serverless) {
@@ -20,11 +19,10 @@ class FileToS3Plugin {
       console.error(e);
       process.exit(1);
     }
-    let fileName = basename(filePath);
     try {
       await s3.upload({
         Bucket: this.serverless.service.custom.csvToDynamo.bucketName,
-        Key: fileName,
+        Key: this.serverless.service.custom.csvToDynamo.bucketKeyName,
         Body: file,
       }).promise();
     } catch(e) {
