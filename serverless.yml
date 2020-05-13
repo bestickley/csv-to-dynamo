@@ -8,18 +8,9 @@ provider:
   environment:
     DYNAMODB_TABLE: ${self:custom.csvToDynamo.tableName}
     REGION: ${self:provider.region}
-  iamRoleStatements:
-    - Effect: Allow
-      Action: 
-        - dynamodb:Scan
-        - dynamodb:BatchWriteItem
-        - s3:GetObject
-      Resource:
-        - arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${self:custom.csvToDynamo.tableName}
-        - arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${self:custom.csvToDynamo.tableName}/index/pk
-        - arn:aws:s3:::${self:custom.csvToDynamo.bucketName}/*
 plugins:
   - serverless-pseudo-parameters
+  - serverless-iam-roles-per-function
   - file-to-s3-plugin
   - invoke-lambda-plugin
 custom:
@@ -35,6 +26,16 @@ functions:
           method: put
           cors: true
           path: put
+    iamRoleStatements:
+      - Effect: Allow
+        Action: 
+          - dynamodb:Scan
+          - dynamodb:BatchWriteItem
+          - s3:GetObject
+        Resource:
+          - arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${self:custom.csvToDynamo.tableName}
+          - arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${self:custom.csvToDynamo.tableName}/index/pk
+          - arn:aws:s3:::${self:custom.csvToDynamo.bucketName}/*
 resources:
   Resources:
     DynamoTable:
