@@ -5,55 +5,23 @@ const AWS = require("aws-sdk");
 const uuid = require("uuid");
 
 module.exports.upload = async event => {
-  /* Get CSV Object from S3 */
   const { Bucket, Key } = JSON.parse(event.body);
-  const s3 = new AWS.S3({ region: process.env.REGION });
-  let s3Data;
-  try {
-    s3Data = await s3.getObject({ Bucket, Key }).promise();
-  } catch(e) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: "Error getting object from S3", error: e})
-    }
-  }
-  const csv = s3Data.Body.toString("utf-8");
 
-  /* Parse CSV */
-  let items;
-  try {
-    items = await new Promise((resolve, reject) => {
-      parse(csv, { columns: true }, (err, records, info) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(records);
-        }
-      });
-    });
-  } catch(e) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: "Error parsing CSV", error: e })
-    }
-  }
+  /* Get CSV Object from S3 */
+  const s3 = new AWS.S3({ region: process.env.REGION });
+  const getS3ObjectPromise = s3.getObject({ Bucket, Key }).promise();
 
   /* Query All Items in Table and Batch Delete Old CSV */
+  const batchDeletePromises = []
   const ddbc = new AWS.DynamoDB.DocumentClient();
-  const scanResult = await ddbc.scan({ TableName: process.env.DYNAMODB_TABLE }).promise();
+  // typically prefer query over scan, but I need all pks to truncate table
+  const scanResult = await ddbc.scan({ TableName: process.env.DYNAMODB_TABLE, ProjectionExpression: "pk"  }).promise();
   let oldBatchItems = [];
   for (const oldItem of scanResult.Items) {
     if ((oldBatchItems.length + 1) % 25 === 0) {
       const params = { RequestItems: { [process.env.DYNAMODB_TABLE]: oldBatchItems } };
-      try {
-        await ddbc.batchWrite(params).promise();
-        oldBatchItems = [];
-      } catch(e) {
-        return {
-          statusCode: 500,
-          body: JSON.stringify({ message: "Error batch deleting items", error: e })
-        }
-      }
+      batchDeletePromises.push(ddbc.batchWrite(params).promise());
+      oldBatchItems = [];
     } else {
       oldBatchItems.push({
         DeleteRequest: {
@@ -65,36 +33,85 @@ module.exports.upload = async event => {
     }
   }
 
-  /* Batch Put New CSV Items */
-  let batchItems = [];
-  for (const item of items) {
-    if ((batchItems.length + 1) % 25 === 0) {
-      const params = { RequestItems: { [process.env.DYNAMODB_TABLE]: batchItems } };
-      try {
-        await ddbc.batchWrite(params).promise();
-        batchItems = []
-      } catch(e) {
-        return {
-          statusCode: 500,
-          body: JSON.stringify({ message: "Error batch putting items", error: e })
-        }
-      }
-    } else {
-      const batchItem = {
-        PutRequest: {
-          Item: {
-            pk: uuid.v4()
-          }
-        }
-      };
-      for (const [key, value] of Object.entries(item)) {
-        if (value) batchItem.PutRequest.Item[key] = value;
-      }
-      batchItems.push(batchItem)
+  let s3GetObjectOutput, batchDeleteResults;
+  try {
+    // don't care about the order of getting s3 object and resetting dynamodb table
+    [s3GetObjectOutput, ...batchDeleteResults] = await Promise.all([getS3ObjectPromise, ...batchDeletePromises]);
+  } catch(err) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: "Error getting S3 object or batch deleting old DynamoDB table", error: err })
     }
   }
+  
+  const csv = s3GetObjectOutput.Body.toString("utf-8");
+
+  /* Parse CSV and Send Put Requests to DynamoDB */
+  const batchPutPromises = [];
+  try {
+    await new Promise((resolve, reject) => {
+      const parser = parse({ columns: true });
+      // when csv is readable, create a batch put request to dynamo db
+      parser.on("readable", () => {
+        // dynamo db batchWrite can only handle 25 items/request
+        let record = {};
+        let records = [];
+        while(record = parser.read()) {
+          records.push(record);
+          if (records.length !== 0 && records.length % 25 === 0) {
+            const batchWriteItems = [];
+            for (const item of records) {
+              const batchWriteItem = {
+                PutRequest: {
+                  Item: {
+                    pk: uuid.v4()
+                  }
+                }
+              };
+              for (const [key, value] of Object.entries(item)) {
+                if (value) batchWriteItem.PutRequest.Item[key] = value;
+              }
+              batchWriteItems.push(batchWriteItem);
+            }
+            batchPutPromises.push(
+              ddbc.batchWrite(
+                { RequestItems: { [process.env.DYNAMODB_TABLE]: batchWriteItems } }
+              )
+            );
+            // reset records
+            records = [];
+          }
+        }
+      });
+      parser.on("error", (err) => {
+        reject(err);
+      });
+      parser.on("end", () => {
+        resolve();
+      });
+      // write data to readable stream
+      parser.write(csv);
+      // close readable stream
+      parser.end();
+    });
+  } catch(err) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: "Error parsing CSV", error: err })
+    }
+  }
+
+  try {
+    await Promise.all(batchPutPromises);
+  } catch(err) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: "Error batch putting items", error: err })
+    }
+  }
+
   return {
     statusCode: 201,
-    body: JSON.stringify({ message: 'Data successfully written to DynamoDB' }),
+    body: JSON.stringify({ message: 'CSV from S3 successfully written to DynamoDB' }),
   };
 };

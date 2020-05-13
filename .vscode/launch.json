@@ -7,7 +7,7 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch Program",
+      "name": "Debug CSV To Dynamo",
       "skipFiles": [
         "<node_internals>/**"
       ],
@@ -21,7 +21,8 @@
         "src/tests/inputData.json",
         "-e",
         "DYNAMODB_TABLE=csv-dev"
-      ]
+      ],
+      "env": {"SLS_DEBUG": "*"}
     }
   ]
 }
