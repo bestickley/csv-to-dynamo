@@ -1,7 +1,7 @@
 {
   "name": "csv-to-dynamo",
   "version": "1.0.0",
-  "description": "Build a serverless framework (serverless.com) deployment that creates a Lambda, an S3 bucket, and a Dynamo DB table and uploads a file to your bucket. Then, write a plugin that invokes the Lambda after the deployment, extracts data from the file in S3 and inserts that data into DynamoDB. Be creative. Show off. Make it interesting.",
+  "description": "Lamabda Function to move a CSV from S3 to DynamoDB",
   "main": "index.js",
   "dependencies": {
     "aws-sdk": "^2.675.0",
@@ -15,6 +15,7 @@
     "serverless-pseudo-parameters": "^2.5.0"
   },
   "scripts": {
+    "debug": "node --inspect-brk %USERPROFILE%\\AppData\\Roaming\\npm\\node_modules\\serverless\\bin\\serverless invoke local -f s3ToDynamo",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

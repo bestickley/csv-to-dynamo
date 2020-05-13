@@ -4,6 +4,26 @@ const parse = require("csv-parse");
 const AWS = require("aws-sdk");
 const uuid = require("uuid");
 
+function batchPutItems(ddbc, records) {
+  const batchWriteItems = [];
+  for (const item of records) {
+    const batchWriteItem = {
+      PutRequest: {
+        Item: {
+          pk: uuid.v4()
+        }
+      }
+    };
+    for (const [key, value] of Object.entries(item)) {
+      if (value) batchWriteItem.PutRequest.Item[key] = value;
+    }
+    batchWriteItems.push(batchWriteItem);
+  }
+  return ddbc.batchWrite(
+    { RequestItems: { [process.env.DYNAMODB_TABLE]: batchWriteItems } }
+  ).promise();
+}
+
 module.exports.handler = async event => {
 
   /* Get CSV Object from S3 */
@@ -58,28 +78,14 @@ module.exports.handler = async event => {
         while(record = parser.read()) {
           records.push(record);
           if (records.length !== 0 && records.length % 25 === 0) {
-            const batchWriteItems = [];
-            for (const item of records) {
-              const batchWriteItem = {
-                PutRequest: {
-                  Item: {
-                    pk: uuid.v4()
-                  }
-                }
-              };
-              for (const [key, value] of Object.entries(item)) {
-                if (value) batchWriteItem.PutRequest.Item[key] = value;
-              }
-              batchWriteItems.push(batchWriteItem);
-            }
-            batchPutPromises.push(
-              ddbc.batchWrite(
-                { RequestItems: { [process.env.DYNAMODB_TABLE]: batchWriteItems } }
-              )
-            );
+            batchPutPromises.push(batchPutItems(ddbc, records));
             // reset records
             records = [];
           }
+        }
+        // put last records
+        if (records.length) {
+          batchPutPromises.push(batchPutItems(ddbc, records));
         }
       });
       parser.on("error", (err) => {
@@ -109,28 +115,8 @@ module.exports.handler = async event => {
     }
   }
 
-  try {
-    if (event.request.intent.name === "ParseCSVIntent") {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          "version": "1.0",
-          "response": {
-            "outputSpeech": {
-              "type": "SSML",
-              "ssml": "<speak>Your CSV is being parsed!</speak>"
-            },
-            "type": "_DEFAULT_RESPONSE"
-          },
-          "sessionAttributes": {},
-          "userAgent": "ask-node/2.7.0 Node/v10.20.0"
-        })
-      };
-    }
-  } catch {
-    return {
-      statusCode: 201,
-      body: JSON.stringify({ message: 'CSV from S3 successfully written to DynamoDB' }),
-    };
-  }
+  return {
+    statusCode: 201,
+    body: JSON.stringify({ message: 'CSV from S3 successfully written to DynamoDB' }),
+  };
 };

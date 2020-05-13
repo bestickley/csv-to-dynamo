@@ -35,6 +35,7 @@ class InvokeLambda {
         }
       );
       if (!res.ok) {
+        console.error("failed Endpoint: " + serviceEndpoint + "/put");
         const error = await res.text();
         throw new Error(error);
       }
