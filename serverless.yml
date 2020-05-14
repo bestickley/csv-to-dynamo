@@ -7,6 +7,7 @@ provider:
   region: us-east-1
   environment:
     DYNAMODB_TABLE: ${self:custom.csvToDynamo.tableName}
+    DYNAMODB_TABLE_SKILL: ${self:custom.csvToDynamo.tableNameSkill}
     REGION: ${self:provider.region}
     BUCKET: ${self:custom.csvToDynamo.bucketName}
     BUCKET_KEY: ${self:custom.csvToDynamo.bucketKeyName}
@@ -19,8 +20,9 @@ custom:
   csvToDynamo:
     filePath: ./data/housing_in_london_yearly_variables.csv
     bucketName: csv-${self:provider.stage}
-    bucketKeyName: csv-${self:provider.stage}
+    bucketKeyName: file-${self:provider.stage}.csv
     tableName: csv-${self:provider.stage}
+    tableNameSkill: csv-skill-${self:provider.stage}
 functions:
   s3ToDynamo:
     handler: src/functions/s3ToDynamo.handler
@@ -39,12 +41,39 @@ functions:
           - arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${self:custom.csvToDynamo.tableName}
           - arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${self:custom.csvToDynamo.tableName}/index/pk
           - arn:aws:s3:::${self:custom.csvToDynamo.bucketName}/*
+  s3ToDynamoSkill:
+    handler: src/functions/s3ToDynamoSkill.handler
+    events:
+      - alexaSkill:
+          appId: amzn1.ask.skill.bc10ea2b-e04a-42c2-917f-e22fd714b5c6
+          enabled: true
+    iamRoleStatements:
+      - Effect: Allow
+        Action: 
+          - dynamodb:Scan
+          - dynamodb:BatchWriteItem
+          - s3:GetObject
+        Resource:
+          - arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${self:custom.csvToDynamo.tableNameSkill}
+          - arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/${self:custom.csvToDynamo.tableNameSkill}/index/pk
+          - arn:aws:s3:::${self:custom.csvToDynamo.bucketName}/*
 resources:
   Resources:
     DynamoTable:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:custom.csvToDynamo.tableName}
+        AttributeDefinitions: 
+          - AttributeName: pk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+    DynamoTableSkill:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.csvToDynamo.tableNameSkill}
         AttributeDefinitions: 
           - AttributeName: pk
             AttributeType: S

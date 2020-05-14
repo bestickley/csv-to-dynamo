@@ -1,0 +1,36 @@
+{
+  "interactionModel": {
+      "languageModel": {
+          "invocationName": "ben's lambda",
+          "intents": [
+              {
+                  "name": "AMAZON.CancelIntent",
+                  "samples": []
+              },
+              {
+                  "name": "AMAZON.HelpIntent",
+                  "samples": []
+              },
+              {
+                  "name": "AMAZON.StopIntent",
+                  "samples": []
+              },
+              {
+                  "name": "ParseCSVIntent",
+                  "slots": [],
+                  "samples": [
+                      "parse my csv to dynamodb",
+                      "parse the csv to dynamodb",
+                      "parse the csv",
+                      "parse my csv"
+                  ]
+              },
+              {
+                  "name": "AMAZON.NavigateHomeIntent",
+                  "samples": []
+              }
+          ],
+          "types": []
+      }
+  }
+}

@@ -4,7 +4,82 @@ const parse = require("csv-parse");
 const AWS = require("aws-sdk");
 const uuid = require("uuid");
 
-function batchPutItems(ddbc, records) {
+/* Get CSV string from S3 */
+async function getCsv(s3, bucket, key) {
+  const response = await s3.getObject({ Bucket: bucket, Key: key }).promise();
+  return response.Body.toString("utf-8");
+}
+
+/* Get all primary keys in Dynamo DB Table */
+async function getAllPks(ddbc, tableName) {
+  const scanResult = await ddbc.scan({ TableName: tableName, ProjectionExpression: "pk"  }).promise();
+  return scanResult.Items.map((i) => i.pk);
+}
+
+/* Batch delete all items in Dynamo DB Table */
+function batchDeleteTable(ddbc, pks, tableName) {
+  const batchDeletePromises = [];
+  let batchRequests = [];
+  for (const pk of pks) {
+    if ((batchRequests.length + 1) % 25 === 0) {
+      batchDeletePromises.push(
+        ddbc.batchWrite({ RequestItems: { [tableName]: batchRequests } }).promise()
+      );
+      batchRequests = [];
+    } else {
+      batchRequests.push({
+        DeleteRequest: {
+          Key: {
+            "pk": pk
+          }
+        }
+      });
+    }
+  }
+  if (batchRequests.length) {
+    batchDeletePromises.push(
+      ddbc.batchWrite({ RequestItems: { [tableName]: batchRequests } }).promise()
+    );
+  }
+  return batchDeletePromises;
+}
+
+async function parseCsv(ddbc, tableName, csv) {
+  return new Promise((resolve, reject) => {
+    const batchPutPromises = [];
+    const parser = parse({ columns: true });
+    // when csv is readable, create a batch put request to dynamo db
+    parser.on("readable", () => {
+      // dynamo db batchWrite can only handle 25 items/request
+      let record = {};
+      let records = [];
+      while(record = parser.read()) {
+        records.push(record);
+        if (records.length !== 0 && records.length % 25 === 0) {
+          batchPutPromises.push(batchPutItems(ddbc, records, tableName));
+          // reset records
+          records = [];
+        }
+      }
+      // put last records
+      if (records.length) {
+        batchPutPromises.push(batchPutItems(ddbc, records, tableName));
+      }
+    });
+    parser.on("error", (err) => {
+      reject(err);
+    });
+    parser.on("end", () => {
+      resolve(batchPutPromises);
+    });
+    // write data to readable stream
+    parser.write(csv);
+    // close readable stream
+    parser.end();
+  });
+}
+
+function batchPutItems(ddbc, records, tableName) {
   const batchWriteItems = [];
   for (const item of records) {
     const batchWriteItem = {
@@ -19,43 +94,22 @@ function batchPutItems(ddbc, records) {
     }
     batchWriteItems.push(batchWriteItem);
   }
-  return ddbc.batchWrite(
-    { RequestItems: { [process.env.DYNAMODB_TABLE]: batchWriteItems } }
-  ).promise();
+  return ddbc.batchWrite({ RequestItems: { [tableName]: batchWriteItems } })
+    .promise();
 }
 
-module.exports.handler = async event => {
+async function s3ToDynamo(s3, ddbc, tableName) {
 
-  /* Get CSV Object from S3 */
-  const s3 = new AWS.S3({ region: process.env.REGION });
-  const getS3ObjectPromise = s3.getObject({ Bucket: process.env.BUCKET, Key: process.env.BUCKET_KEY }).promise();
+  const getCsvPromise = getCsv(s3, process.env.BUCKET, process.env.BUCKET_KEY);
 
-  /* Query All Items in Table and Batch Delete Old CSV */
-  const batchDeletePromises = []
-  const ddbc = new AWS.DynamoDB.DocumentClient();
-  // typically prefer query over scan, but I need all pks to truncate table
-  const scanResult = await ddbc.scan({ TableName: process.env.DYNAMODB_TABLE, ProjectionExpression: "pk"  }).promise();
-  let oldBatchItems = [];
-  for (const oldItem of scanResult.Items) {
-    if ((oldBatchItems.length + 1) % 25 === 0) {
-      const params = { RequestItems: { [process.env.DYNAMODB_TABLE]: oldBatchItems } };
-      batchDeletePromises.push(ddbc.batchWrite(params).promise());
-      oldBatchItems = [];
-    } else {
-      oldBatchItems.push({
-        DeleteRequest: {
-          Key: {
-            "pk": oldItem.pk
-          }
-        }
-      });
-    }
-  }
+  const allPks = await getAllPks(ddbc, tableName);
 
-  let s3GetObjectOutput, batchDeleteResults;
+  const batchDeletePromises = batchDeleteTable(ddbc, allPks, tableName);
+
+  let csv, batchDeleteResponses;
   try {
     // don't care about the order of getting s3 object and resetting dynamodb table
-    [s3GetObjectOutput, ...batchDeleteResults] = await Promise.all([getS3ObjectPromise, ...batchDeletePromises]);
+    [csv, ...batchDeleteResponses] = await Promise.all([getCsvPromise, ...batchDeletePromises]);
   } catch(err) {
     return {
       statusCode: 500,
@@ -63,42 +117,11 @@ module.exports.handler = async event => {
     }
   }
   
-  const csv = s3GetObjectOutput.Body.toString("utf-8");
 
   /* Parse CSV and Send Put Requests to DynamoDB */
-  const batchPutPromises = [];
+  let batchPutPromises = [];
   try {
-    await new Promise((resolve, reject) => {
-      const parser = parse({ columns: true });
-      // when csv is readable, create a batch put request to dynamo db
-      parser.on("readable", () => {
-        // dynamo db batchWrite can only handle 25 items/request
-        let record = {};
-        let records = [];
-        while(record = parser.read()) {
-          records.push(record);
-          if (records.length !== 0 && records.length % 25 === 0) {
-            batchPutPromises.push(batchPutItems(ddbc, records));
-            // reset records
-            records = [];
-          }
-        }
-        // put last records
-        if (records.length) {
-          batchPutPromises.push(batchPutItems(ddbc, records));
-        }
-      });
-      parser.on("error", (err) => {
-        reject(err);
-      });
-      parser.on("end", () => {
-        resolve();
-      });
-      // write data to readable stream
-      parser.write(csv);
-      // close readable stream
-      parser.end();
-    });
+    batchPutPromises = await parseCsv(ddbc, tableName, csv);
   } catch(err) {
     return {
       statusCode: 500,
@@ -120,3 +143,15 @@ module.exports.handler = async event => {
     body: JSON.stringify({ message: 'CSV from S3 successfully written to DynamoDB' }),
   };
 };
+
+async function handler(event) {
+  // initialize AWS services
+  const s3 = new AWS.S3({ region: process.env.REGION });
+  const ddbc = new AWS.DynamoDB.DocumentClient();
+  return await s3ToDynamo(s3, ddbc, process.env.DYNAMODB_TABLE);
+}
+
+module.exports = {
+  handler,
+  s3ToDynamo,
+}
