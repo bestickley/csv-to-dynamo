@@ -21,10 +21,10 @@ Notes:
 1. Create a custom skill
 1. Copy Your Skill ID from: Build Tab > Custom > Endpoint and paste it into the `functions.s3ToDynamoSkill.event[1].alexaSkill.appId`
 1. Copy alexa/interactionModel.json into: Build Tab > Custom > Interaction Model > JSON Editor
-1. Copy the ARN of the `csv-to-dynamo-s3ToDynamoSkill` lambda function and paste it into: Build Tab > Custom > Endpoint > Default Region
+1. Copy the ARN of the csv-to-dynamo-s3ToDynamoSkill lambda function and paste it into: Build Tab > Custom > Endpoint > Default Region
 1. Navigate to: Build Tab > Custom > Interfaces and click "Build Model"
 1. Check the csv-skill-dev DynamoDB table and ensure it's empty
 1. Go to the Test tab and say or type into the Alexa Simlator: "launch ben's lambda and parse my csv to dynamodb"
 1. Check the csv-skill-dev DynamoDB table and ensure it's filled
 
-To see Alexa in action, check out [this video](https://drive.google.com/open?id=1IWtEldeLvGpGxSXlDyhdgyKlNZ6pjCzZ)
+To see Alexa in action, check out [this video](https://drive.google.com/file/d/1-Ey-asfCmztteObL5CE8kkVfcA1xdyKL/view)
