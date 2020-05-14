@@ -27,6 +27,8 @@ class InvokeLambda {
     
     /* Invoke Lambda Function */
     try {
+      // wait for lambda to spin up
+      await new Promise((resolve) => setTimeout(() => resolve(), 5000));
       const res = await fetch(
         serviceEndpoint + "/put",
         {
