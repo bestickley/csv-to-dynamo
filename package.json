@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "@types/node-fetch": "^2.5.7",
-    "node-fetch": "^2.6.0",
+    "node-fetch": "^2.6.1",
     "serverless-iam-roles-per-function": "^2.0.2",
     "serverless-pseudo-parameters": "^2.5.0"
   },
